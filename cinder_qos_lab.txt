@@ -1,0 +1,114 @@
+# Connect to the utility container
+ssh 172.29.236.225 -l root
+
+# Use the 'admin' credentials
+source ~/openrc
+
+# Define your Tenant name
+TNAME=`keystone tenant-list | awk '/ <your tenant name> / { print $4 }'`
+
+# Define the other groups Tenant name
+OTNAME=`keystone tenant-list | awk '/ <other groups tenant name> / { print $4 }'`
+
+# List current cinder types available
+cinder type-list
+
+# Create a volume-type for SSD high-iops
+cinder type-create $TNAME_ssd_high_iops
+HIGH_IOPS_ID=`cinder type-list | awk '/ $TNAME'_ssd_high_iops' / { print $2 }'`
+
+# Create a volume-type for SSD low-iops
+cinder type-create $TNAME_sata_low_iops
+LOW_IOPS_ID=`cinder type-list | awk '/ $TNAME'_sata_low_iops' / { print $2 }'`
+
+# Link volume-types to back-end name
+cinder type-key $HIGH_IOPS_ID set volume_backend_name=LVM_iSCSI_2
+cinder type-key $LOW_IOPS_ID set volume_backend_name=LVM_iSCSI
+
+# Create QoS for high-iops
+cinder qos-create $TNAME'_high-iops' consumer="front-end" total_iops_sec=4000
+QOS_HIGH_IOPS_ID=`cinder qos-list | awk '/ $TNAME'_high-iops' / { print $2 }'`
+
+# Create QoS for low-iops
+cinder qos-create $TNAME'_low-iops' consumer="front-end" total_iops_sec=100
+QOS_LOW_IOPS_ID=`cinder qos-list | awk '/ $TNAME'_low-iops' / { print $2 }'`
+
+# Associate high-iops QoS with ssd_high_iops type
+cinder qos-associate $QOS_HIGH_IOPS_ID $HIGH_IOPS_ID
+
+# Associate low-iops QoS with ssd_low_iops type
+cinder qos-associate $QOS_LOW_IOPS_ID $LOW_IOPS_ID
+
+# Exit out of the utility container
+exit
+
+# Use your student credentials
+source ~/openrc-<your tenant name>
+
+# Define your Tenant name
+TNAME=`keystone tenant-list | awk '/ <your tenant name> / { print $4 }'`
+
+# Create a new high-iops volume
+cinder create 10 --volume-type $TNAME'_ssd_high_iops' --display-name $TNAME'_FirstVolumeHigh'
+MYFIRSTVOLUME_HIGH_ID=`cinder show $TNAME'_FirstVolumeHigh' | awk '/ id / { print $4 }'`
+
+# Create a new low-iops volume
+cinder create 10 --volume-type $TNAME'_sata_low_iops' --display-name $TNAME'_FirstVolumeLow'
+MYFIRSTVOLUME_LOW_ID=`cinder show $TNAME'_FirstVolumeLow' | awk '/ id / { print $4 }'`
+
+# Add rules to default Security Group
+neutron security-group-rule-create --direction ingress --ethertype IPv4 --protocol icmp default
+neutron security-group-rule-create --direction ingress --ethertype IPv4 --protocol tcp \
+--port-range-min 22 --port-range-max 22 default
+
+# Boot an instance to attach volumes to
+nova boot --image cirros-0.3.3 --flavor m1.small $TNAME'_HighLowVolumeInstance'
+MYHIGHLOWVOLUMEINSTANCE_ID=`nova show $TNAME'_HighLowVolumeInstance' | awk '/ id / { print $4 }'`
+
+# List instances, notice status of instance and network address
+nova list
+
+# List volumes, notice status of volume
+cinder list
+
+# Attach volume to instance after instance is active, and volume is available
+nova volume-attach $MYHIGHLOWVOLUMEINSTANCE_ID $MYFIRSTVOLUME_HIGH_ID
+
+# Attach low-iops volume to instance
+nova volume-attach $MYHIGHLOWVOLUMEINSTANCE_ID $MYFIRSTVOLUME_LOW_ID
+
+# Exit out of the utility container
+exit
+
+# Connect to the Neutron agent container
+ssh 172.29.236.120
+
+# Use the 'admin' credentials
+source ~/openrc
+
+# Save network ID
+NET_ID=`neutron net-list | awk '/ private-network / { print $2 }'`
+
+# List availabe Network Namespaces
+ip netns list
+
+# SSH to your instance via the Network Namespace
+ip netns exec 'qdhcp-'$NET_ID ssh cirros@<instance IP>
+
+# List storage devices, /dev/vdb & /dev/vdc should now be present
+sudo su
+lsblk
+
+# Calculate I/O on both volumes and compare
+hdparm -t /dev/vdb
+hdparm -t /dev/vdc
+
+# Exit out of the test instance
+exit
+exit
+
+# Exit out of the Neutron agent container
+exit
+
+# Close connection to the OpenStack cloud
+exit
