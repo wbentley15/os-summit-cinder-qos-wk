@@ -14,12 +14,12 @@ OTNAME=`keystone tenant-list | awk '/ <other groups tenant name> / { print $4 }'
 cinder type-list
 
 # Create a volume-type for SSD high-iops
-cinder type-create $TNAME_ssd_high_iops
-HIGH_IOPS_ID=`cinder type-list | awk '/ $TNAME'_ssd_high_iops' / { print $2 }'`
+cinder type-create $TNAME'_ssd_high_iops'
+HIGH_IOPS_ID=`cinder type-list | awk '/ <high iops volume type name> / { print $2 }'`
 
 # Create a volume-type for SSD low-iops
-cinder type-create $TNAME_sata_low_iops
-LOW_IOPS_ID=`cinder type-list | awk '/ $TNAME'_sata_low_iops' / { print $2 }'`
+cinder type-create $TNAME'_sata_low_iops'
+LOW_IOPS_ID=`cinder type-list | awk '/ <low iops volume type name> / { print $2 }'`
 
 # Link volume-types to back-end name
 cinder type-key $HIGH_IOPS_ID set volume_backend_name=LVM_iSCSI_2
@@ -27,11 +27,11 @@ cinder type-key $LOW_IOPS_ID set volume_backend_name=LVM_iSCSI
 
 # Create QoS for high-iops
 cinder qos-create $TNAME'_high-iops' consumer="front-end" total_iops_sec=4000
-QOS_HIGH_IOPS_ID=`cinder qos-list | awk '/ $TNAME'_high-iops' / { print $2 }'`
+QOS_HIGH_IOPS_ID=`cinder qos-list | awk '/ <QoS spec high iops name> / { print $2 }'`
 
 # Create QoS for low-iops
 cinder qos-create $TNAME'_low-iops' consumer="front-end" total_iops_sec=100
-QOS_LOW_IOPS_ID=`cinder qos-list | awk '/ $TNAME'_low-iops' / { print $2 }'`
+QOS_LOW_IOPS_ID=`cinder qos-list | awk '/ <QoS spec low iops name> / { print $2 }'`
 
 # Associate high-iops QoS with ssd_high_iops type
 cinder qos-associate $QOS_HIGH_IOPS_ID $HIGH_IOPS_ID
@@ -47,6 +47,7 @@ source ~/openrc-<your tenant name>
 
 # Define your Tenant name
 TNAME=`keystone tenant-list | awk '/ <your tenant name> / { print $4 }'`
+TNAMEID=`keystone tenant-list | awk '/ <your tenant name> / { print $2 }'`
 
 # Create a new high-iops volume
 cinder create 10 --volume-type $TNAME'_ssd_high_iops' --display-name $TNAME'_FirstVolumeHigh'
@@ -55,11 +56,6 @@ MYFIRSTVOLUME_HIGH_ID=`cinder show $TNAME'_FirstVolumeHigh' | awk '/ id / { prin
 # Create a new low-iops volume
 cinder create 10 --volume-type $TNAME'_sata_low_iops' --display-name $TNAME'_FirstVolumeLow'
 MYFIRSTVOLUME_LOW_ID=`cinder show $TNAME'_FirstVolumeLow' | awk '/ id / { print $4 }'`
-
-# Add rules to default Security Group
-neutron security-group-rule-create --direction ingress --ethertype IPv4 --protocol icmp default
-neutron security-group-rule-create --direction ingress --ethertype IPv4 --protocol tcp \
---port-range-min 22 --port-range-max 22 default
 
 # Boot an instance to attach volumes to
 nova boot --image cirros-0.3.3 --flavor m1.small $TNAME'_HighLowVolumeInstance'
