@@ -73,9 +73,6 @@ nova volume-attach $MYHIGHLOWVOLUMEINSTANCE_ID $MYFIRSTVOLUME_HIGH_ID
 # Attach low-iops volume to instance
 nova volume-attach $MYHIGHLOWVOLUMEINSTANCE_ID $MYFIRSTVOLUME_LOW_ID
 
-# Exit out of the utility container
-exit
-
 # Connect to the Neutron agent container
 ssh 172.29.236.120
 
